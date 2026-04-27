@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "com.simulador.balanza.app-debug-35:/layout_activity_simulador.xml.flat",
+        "source": "com.simulador.balanza.app-main-37:/layout/activity_simulador.xml"
+    },
+    {
+        "merged": "com.simulador.balanza.app-debug-35:/xml_data_extraction_rules.xml.flat",
+        "source": "com.simulador.balanza.app-main-37:/xml/data_extraction_rules.xml"
+    },
+    {
+        "merged": "com.simulador.balanza.app-debug-35:/layout_activity_serial.xml.flat",
+        "source": "com.simulador.balanza.app-main-37:/layout/activity_serial.xml"
+    },
+    {
+        "merged": "com.simulador.balanza.app-debug-35:/xml_backup_rules.xml.flat",
+        "source": "com.simulador.balanza.app-main-37:/xml/backup_rules.xml"
+    },
+    {
+        "merged": "com.simulador.balanza.app-debug-35:/layout_activity_moba.xml.flat",
+        "source": "com.simulador.balanza.app-main-37:/layout/activity_moba.xml"
+    }
+]

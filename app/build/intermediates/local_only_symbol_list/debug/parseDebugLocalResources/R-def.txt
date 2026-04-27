@@ -1,0 +1,25 @@
+R_DEF: Internal format may change without notice
+local
+color black
+color colorAccent
+color colorPrimary
+color colorPrimaryDark
+color white
+id btnEnviar
+id btnMoba
+id btnPermissions
+id btnVieja
+id etCode
+id etDescripcion
+id etPeso
+id etTag
+id switchServer
+id tvConnections
+id tvStatus
+layout activity_moba
+layout activity_serial
+layout activity_simulador
+string app_name
+style Theme.BalanzaSimulador
+xml backup_rules
+xml data_extraction_rules
