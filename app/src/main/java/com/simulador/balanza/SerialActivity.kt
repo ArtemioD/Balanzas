@@ -4,7 +4,9 @@ import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -56,15 +58,21 @@ class SerialActivity : AppCompatActivity() {
     private lateinit var switchServer: Switch
     private lateinit var btnPermissions: Button
 
-    // Permisos requeridos
-    private val requiredPermissions = arrayOf(
-        Manifest.permission.BLUETOOTH,
-        Manifest.permission.BLUETOOTH_ADMIN,
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.BLUETOOTH_SCAN,
-        Manifest.permission.BLUETOOTH_ADVERTISE,
-        Manifest.permission.BLUETOOTH_CONNECT
-    )
+    // Permisos requeridos según la versión de Android
+    private val requiredPermissions: Array<String>
+        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_ADVERTISE,
+                Manifest.permission.BLUETOOTH_CONNECT
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        }
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -135,19 +143,34 @@ class SerialActivity : AppCompatActivity() {
         }
         
         if (!bluetoothAdapter!!.isEnabled) {
-            Toast.makeText(this, "Habilita Bluetooth para continuar", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Habilitando Bluetooth...", Toast.LENGTH_SHORT).show()
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                    startActivity(enableBtIntent)
+                }
+            } else {
+                startActivity(enableBtIntent)
+            }
             return
         }
         
-        // Hacer el dispositivo discoverable con el nombre correcto
-        makeDiscoverable()
         updateUI()
     }
 
     private fun makeDiscoverable() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED) {
+        val hasConnectPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else true
+
+        if (hasConnectPermission) {
             bluetoothAdapter?.name = DEVICE_NAME
             Log.d(TAG, "Nombre del dispositivo cambiado a: $DEVICE_NAME")
+            
+            val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+            }
+            startActivity(discoverableIntent)
         }
     }
 
@@ -156,6 +179,9 @@ class SerialActivity : AppCompatActivity() {
             checkPermissions()
             return
         }
+
+        // Asegurar que el nombre sea correcto y sea visible antes de iniciar
+        makeDiscoverable()
 
         try {
             serverSocket = bluetoothAdapter?.listenUsingRfcommWithServiceRecord(DEVICE_NAME, SPP_UUID)

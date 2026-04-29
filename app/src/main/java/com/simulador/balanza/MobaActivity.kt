@@ -4,6 +4,7 @@ import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -14,7 +15,6 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresPermission
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import java.io.IOException
@@ -24,8 +24,8 @@ import java.util.*
 /**
  * 🔬 SIMULADOR DE BALANZA MOBA
  * 
- * Formato de trama:
- * [STX] [POL] [nnnnnnn] [;] [aaaaaaaaaaaaaaaa] [;] [ccc] [CR]
+ * Simula una balanza con el formato de trama MOBA:
+ * [STX][POL][nnnnnnn];[aaaaaaaaaaaaaaaa];[ccc][CR]
  */
 class MobaActivity : AppCompatActivity() {
 
@@ -33,10 +33,10 @@ class MobaActivity : AppCompatActivity() {
         private const val TAG = "MobaSimulador"
         private const val DEVICE_NAME = "MOBA_SIMULADOR_001"
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-        
-        // Formato de trama MOBA
-        private const val STX = 2.toChar()
-        private const val CR = 13.toChar()
+
+        // Formato MOBA
+        private const val STX = 2.toChar() // Start of Text
+        private const val CR = 13.toChar() // Carriage Return
         private const val SEPARATOR = ";"
         private const val WEIGHT_LENGTH = 7
         private const val TAG_LENGTH = 16
@@ -59,26 +59,15 @@ class MobaActivity : AppCompatActivity() {
     private lateinit var switchServer: Switch
     private lateinit var btnPermissions: Button
 
-    // Permisos requeridos
-    private val requiredPermissions = arrayOf(
-        Manifest.permission.BLUETOOTH,
-        Manifest.permission.BLUETOOTH_ADMIN,
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.BLUETOOTH_SCAN,
-        Manifest.permission.BLUETOOTH_ADVERTISE,
-        Manifest.permission.BLUETOOTH_CONNECT
-    )
-
-    private val permissionsByVersion: Array<String>
+    // Permisos requeridos según la versión de Android
+    private val requiredPermissions: Array<String>
         get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12+
             arrayOf(
                 Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_ADVERTISE,
                 Manifest.permission.BLUETOOTH_CONNECT
             )
         } else {
-            // Android 11 o inferior
             arrayOf(
                 Manifest.permission.BLUETOOTH,
                 Manifest.permission.BLUETOOTH_ADMIN,
@@ -120,7 +109,7 @@ class MobaActivity : AppCompatActivity() {
     private fun setupUI() {
         // Valores por defecto
         etTag.setText("1234567890123456")
-        etPeso.setText("0000450")
+        etPeso.setText("450")
         etCode.setText("001")
         
         btnEnviar.setOnClickListener { enviarPeso() }
@@ -137,26 +126,10 @@ class MobaActivity : AppCompatActivity() {
     }
 
     private fun checkPermissions() {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12 o superior
-            arrayOf(
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_ADVERTISE,
-                Manifest.permission.BLUETOOTH_CONNECT
-            )
-        } else {
-            // Android 11 o inferior
-            arrayOf(
-                Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-        }
-
-        val missingPermissions = permissions.filter {
+        val missingPermissions = requiredPermissions.filter {
             ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-
+        
         if (missingPermissions.isNotEmpty()) {
             requestPermissionLauncher.launch(missingPermissions.toTypedArray())
         } else {
@@ -173,36 +146,45 @@ class MobaActivity : AppCompatActivity() {
         }
         
         if (!bluetoothAdapter!!.isEnabled) {
-            Toast.makeText(this, "Habilita Bluetooth para continuar", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Habilitando Bluetooth...", Toast.LENGTH_SHORT).show()
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                    startActivity(enableBtIntent)
+                }
+            } else {
+                startActivity(enableBtIntent)
+            }
             return
         }
         
-        makeDiscoverable()
         updateUI()
     }
 
     private fun makeDiscoverable() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED &&
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+        val hasConnectPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else true
 
-            // 1. Intentar cambiar el nombre
+        if (hasConnectPermission) {
             bluetoothAdapter?.name = DEVICE_NAME
-            Log.d(TAG, "Nombre cambiado a: ${bluetoothAdapter?.name}")
-
-            // 2. LANZAR PETICIÓN DE VISIBILIDAD (Esto hace que el otro teléfono lo encuentre)
-            val discoverableIntent = android.content.Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300) // Visible por 5 minutos
+            Log.d(TAG, "Nombre del dispositivo cambiado a: $DEVICE_NAME")
+            
+            val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
             }
             startActivity(discoverableIntent)
         }
     }
 
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun startServer() {
         if (!hasPermissions()) {
             checkPermissions()
             return
         }
+
+        // Asegurar que el nombre sea correcto y sea visible antes de iniciar
+        makeDiscoverable()
 
         try {
             serverSocket = bluetoothAdapter?.listenUsingRfcommWithServiceRecord(DEVICE_NAME, SPP_UUID)
@@ -211,7 +193,7 @@ class MobaActivity : AppCompatActivity() {
             acceptThread = AcceptThread()
             acceptThread?.start()
             
-            Log.d(TAG, "Servidor Bluetooth iniciado - Esperando conexiones...")
+            Log.d(TAG, "Servidor Bluetooth MOBA iniciado")
             updateUI()
             
         } catch (e: IOException) {
@@ -234,10 +216,10 @@ class MobaActivity : AppCompatActivity() {
             serverSocket?.close()
             serverSocket = null
             
-            Log.d(TAG, "Servidor Bluetooth detenido")
+            Log.d(TAG, "Servidor Bluetooth MOBA detenido")
             updateUI()
             
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             Log.e(TAG, "Error deteniendo servidor: ${e.message}")
         }
     }
@@ -250,11 +232,21 @@ class MobaActivity : AppCompatActivity() {
 
         val pesoInput = etPeso.text.toString()
         val pol = if (pesoInput.startsWith("-")) "-" else " "
-        val pesoVal = pesoInput.replace("-", "").take(WEIGHT_LENGTH).padStart(WEIGHT_LENGTH, '0')
-        val tagVal = etTag.text.toString().take(TAG_LENGTH).padEnd(TAG_LENGTH, ' ')
-        val codeVal = etCode.text.toString().take(CODE_LENGTH).padStart(CODE_LENGTH, '0')
         
-        // [STX] [POL] [nnnnnnn] [;] [aaaaaaaaaaaaaaaa] [;] [ccc] [CR]
+        // El valor numérico limpio, relleno con ceros a la izquierda (7 dígitos)
+        val pesoVal = pesoInput.replace("-", "")
+            .padStart(WEIGHT_LENGTH, '0')
+            .takeLast(WEIGHT_LENGTH)
+            
+        val tagVal = etTag.text.toString()
+            .padEnd(TAG_LENGTH, ' ')
+            .take(TAG_LENGTH)
+            
+        val codeVal = etCode.text.toString()
+            .padStart(CODE_LENGTH, '0')
+            .takeLast(CODE_LENGTH)
+
+        // Formato: [STX][POL][nnnnnnn];[aaaaaaaaaaaaaaaa];[ccc][CR]
         val trama = "$STX$pol$pesoVal$SEPARATOR$tagVal$SEPARATOR$codeVal$CR"
         
         try {
@@ -262,12 +254,12 @@ class MobaActivity : AppCompatActivity() {
             outputStream.write(trama.toByteArray())
             outputStream.flush()
             
-            Log.d(TAG, "Trama MOBA enviada: '$trama'")
+            Log.d(TAG, "Trama MOBA enviada: $trama")
             Toast.makeText(this, "Trama MOBA enviada", Toast.LENGTH_SHORT).show()
             
         } catch (e: IOException) {
-            Log.e(TAG, "Error enviando trama: ${e.message}")
-            Toast.makeText(this, "Error enviando trama", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "Error enviando: ${e.message}")
+            Toast.makeText(this, "Error enviando peso", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -285,13 +277,13 @@ class MobaActivity : AppCompatActivity() {
                     btnEnviar.isEnabled = false
                 }
                 isServerRunning && clientSocket?.isConnected == true -> {
-                    tvStatus.text = "✅ Conectado"
+                    tvStatus.text = "✅ CONECTADO"
                     tvConnections.text = "Cliente: ${clientSocket?.remoteDevice?.name ?: "Desconocido"}"
                     switchServer.isEnabled = true
                     btnEnviar.isEnabled = true
                 }
                 isServerRunning -> {
-                    tvStatus.text = "🔍 Esperando conexión..."
+                    tvStatus.text = "🔍 ESPERANDO CONEXIÓN..."
                     tvConnections.text = "Nombre: $DEVICE_NAME"
                     switchServer.isEnabled = true
                     btnEnviar.isEnabled = false
@@ -307,7 +299,7 @@ class MobaActivity : AppCompatActivity() {
     }
 
     private fun hasPermissions(): Boolean {
-        return permissionsByVersion.all {
+        return requiredPermissions.all {
             ActivityCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
     }
@@ -324,9 +316,7 @@ class MobaActivity : AppCompatActivity() {
                             Thread.sleep(1000)
                         }
                     }
-                } catch (e: IOException) {
-                    break
-                } catch (e: InterruptedException) {
+                } catch (e: Exception) {
                     break
                 }
             }

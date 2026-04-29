@@ -1,0 +1,24 @@
+# Archivos de compilación y temporales
+.gradle/
+build/
+app/build/
+*.iml
+
+# Configuración de IDE (Android Studio / IntelliJ)
+.idea/
+*.ipr
+*.iws
+
+# Configuración local (contiene rutas de tu PC)
+local.properties
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de Kotlin
+.kotlin/
+
+# Capturas y logs
+/captures/
+*.log
